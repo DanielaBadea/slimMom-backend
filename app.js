@@ -3,7 +3,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const passport = require('passport');
 require('./config/passport')(passport);
-// const { specs, swaggerUi } = require('./swagger');
+const { specs, swaggerUi } = require('./swagger');
 
 const app = express();
 const formatsLogger = app.get('env') === 'development' ? 'dev' : 'short';
@@ -11,7 +11,8 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan(formatsLogger));
 app.use(passport.initialize());
-// app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 const authRouter = require('./routes/auth');
 const recommendationRouter = require('./routes/recommendations');
@@ -22,12 +23,12 @@ const summaryRouter = require('./routes/summery');
 app.use('/api/auth', authRouter);
 app.use('/api/products', recommendationRouter);
 app.use('/api/products', searchProductsRouter);
-app.use('/api/products', diaryRouter);
-app.use('/api/products', summaryRouter);
+app.use('/api/diary', diaryRouter);
+app.use('/api', summaryRouter);
 
-// app.get('/', (req, res) => {
-//   res.send('Hello, Swagger!');
-// });
+app.get('/', (req, res) => {
+  res.send('Hello, Swagger!');
+});
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Not found' });

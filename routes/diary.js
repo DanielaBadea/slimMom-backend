@@ -5,6 +5,137 @@ const Product = require('../models/products');
 const auth = require('../middlewares/auth');  
 const { startOfDay, endOfDay } = require('date-fns');
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Product:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *           example: "5d51694802b2373622ff5530"
+ *         categories:
+ *           type: string
+ *           example: "eggs"
+ *         weight:
+ *           type: number
+ *           example: 100
+ *         title:
+ *           type: string
+ *           example: "Omelet with cheese"
+ *         calories:
+ *           type: number
+ *           example: 342
+ *         groupBloodNotAllowed:
+ *           type: array
+ *           items:
+ *             type: boolean
+ *           example: [null, true, true, true, true]
+ */
+
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     DiaryEntry:
+ *       type: object
+ *       properties:
+ *         productId:
+ *           type: string
+ *           example: "60c72b2f9b1e8d001f64760b"
+ *         product_weight:
+ *           type: number
+ *           example: 150
+ *         product_Calories:
+ *           type: number
+ *           example: 404
+ *         date:
+ *           type: string
+ *           format: date-time
+ *           example: "2024-09-12T00:00:00.000Z"
+ *     Diary:
+ *       type: object
+ *       properties:
+ *         userId:
+ *           type: string
+ *           example: "60c72b2f9b1e8d001f64760b"
+ *         entries:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/DiaryEntry'
+ */
+
+/**
+ * @swagger
+ * /api/diary/consumed:
+ *   post:
+ *     summary: Add a consumed product for the current day
+ *     tags: [Diary]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               productId:
+ *                 type: string
+ *                 example: "60c72b2f9b1e8d001f64760b"
+ *               product_weight:
+ *                 type: number
+ *                 example: 150
+ *             required:
+ *               - productId
+ *               - product_weight
+ *     responses:
+ *       201:
+ *         description: Successfully added/updated consumed product
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Consumed product added/updated successfully"
+ *                 diaryEntry:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: "66e05e3f00b70bb9b3c184ec"
+ *                     userId:
+ *                       type: string
+ *                       example: "66e05e3f00b70bb9b3c184cc"
+ *                     entries:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/DiaryEntry'
+ *       400:
+ *         description: Product ID and weight are required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Product ID and weight are required"
+ *       500:
+ *         description: Error adding/updating consumed product
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Error adding/updating consumed product"
+ */
 
 //  Crearea unui endpoint pentru a adăuga un produs consumat într-o anumită zi.
 router.post('/consumed', auth, async (req, res) => {
@@ -68,29 +199,99 @@ router.post('/consumed', auth, async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/diary/remove/{date}/{productId}:
+ *   delete:
+ *     summary: Remove a consumed product from the diary for a specific date
+ *     tags: [Diary]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: date
+ *         in: path
+ *         required: true
+ *         description: The date of the diary entry from which the product will be removed
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *           example: "2024-09-10T00:00:00.000Z"
+ *       - name: productId
+ *         in: path
+ *         required: true
+ *         description: ID of the product to remove
+ *         schema:
+ *           type: string
+ *           example: "60c72b2f9b1e8d001f64760b"
+ *     responses:
+ *       200:
+ *         description: Successfully removed consumed product
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Consumed product removed successfully!"
+ *       404:
+ *         description: Diary entry or product not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Product not found in diary for this date!"
+ *       500:
+ *         description: Error removing consumed product
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to delete product!"
+ */
+
+
 
 // Crearea unui endpoint pentru a șterge un produs consumat într-o anumită zi.
-router.delete('/remove/:productId', auth, async (req, res) => {
+
+router.delete('/remove/:date/:productId', auth, async (req, res) => {
     try {
-        const { productId } = req.params;
+        const { date, productId } = req.params;
         const userId = req.user._id;
 
-        const diaryEntry = await Diary.findOne({ userId });
+        // inceputul si sfarsitul zilei
+        const startDate = startOfDay(new Date(date));
+        const endDate = endOfDay(new Date(date));
+
+        // caut in colectie datele utiliz pe ziua respectiva
+        const diaryEntry = await Diary.findOne({
+            userId,
+            'entries.date': {
+                $gte: startDate,
+                $lte: endDate
+            }
+        });
 
         if (!diaryEntry) {
-            return res.status(404).json({ message: "Diary not found!" });
+            return res.status(404).json({ message: "Diary entry not found for this date!" });
         }
 
-        const entryIndex = diaryEntry.entries.findIndex(entry => 
+        const entryIndex = diaryEntry.entries.findIndex(entry =>
             entry.productId.toString() === productId.toString() &&
-            new Date(entry.date).toDateString() === new Date().toDateString()
+            new Date(entry.date).toDateString() === new Date(date).toDateString()
         );
 
         if (entryIndex === -1) {
             const product = await Product.findById(productId);
             const productTitle = product ? product.title : 'unknown product';
             
-            return res.status(404).json({ message: `Product ${productTitle} not found in diary!` });
+            return res.status(404).json({ message: `Product ${productTitle} not found in diary for this date!` });
         }
 
         diaryEntry.entries.splice(entryIndex, 1);
@@ -103,6 +304,75 @@ router.delete('/remove/:productId', auth, async (req, res) => {
         return res.status(500).json({ error: 'Failed to delete product!' });
     }
 });
+
+
+/**
+ * @swagger
+ * /api/diary/consumed/{date}:
+ *   get:
+ *     summary: Get all consumed products for a specific date
+ *     tags: [Diary]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: date
+ *         in: path
+ *         required: true
+ *         description: Date for which to retrieve consumed products 
+ *         schema:
+ *           type: string
+ *           example: "2024-09-12"
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved consumed products
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 date:
+ *                   type: string
+ *                   format: date
+ *                   example: "2024-09-12"
+ *                 consumedProducts:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       productId:
+ *                         type: object
+ *                         $ref: '#/components/schemas/Product'
+ *                       product_weight:
+ *                         type: number
+ *                         example: 50
+ *                       product_Calories:
+ *                         type: number
+ *                         example: 171
+ *                       date:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2024-09-12T00:00:00.000Z"
+ *       404:
+ *         description: No diary entry found for the specified date
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "No diary entry found for this date."
+ *       500:
+ *         description: Error fetching consumed products
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Error fetching consumed products"
+ */
 
 
 
@@ -231,6 +501,40 @@ module.exports = router;
 //     } catch (error) {
 //         console.error(error);
 //         return res.status(500).json({ message: "Error adding consumed product" });
+//     }
+// });
+// Crearea unui endpoint pentru a șterge un produs consumat într-o anumită zi.
+// router.delete('/remove/:productId', auth, async (req, res) => {
+//     try {
+//         const { productId } = req.params;
+//         const userId = req.user._id;
+
+//         const diaryEntry = await Diary.findOne({ userId });
+
+//         if (!diaryEntry) {
+//             return res.status(404).json({ message: "Diary not found!" });
+//         }
+
+//         const entryIndex = diaryEntry.entries.findIndex(entry =>
+//             entry.productId.toString() === productId.toString() &&
+//             new Date(entry.date).toDateString() === new Date().toDateString()
+//         );
+
+//         if (entryIndex === -1) {
+//             const product = await Product.findById(productId);
+//             const productTitle = product ? product.title : 'unknown product';
+            
+//             return res.status(404).json({ message: `Product ${productTitle} not found in diary!` });
+//         }
+
+//         diaryEntry.entries.splice(entryIndex, 1);
+//         await diaryEntry.save();
+
+//         return res.status(200).json({ message: "Consumed product removed successfully!" });
+
+//     } catch (error) {
+//         console.error("Error deleting product:", error);
+//         return res.status(500).json({ error: 'Failed to delete product!' });
 //     }
 // });
 
