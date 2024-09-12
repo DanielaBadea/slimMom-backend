@@ -18,10 +18,10 @@ const options = {
                 url: 'http://localhost:5000',
                 description: 'Local API base URL',
             },
-            {
-                url: 'https://slim-moom.goit.global',
-                description: 'Production API base URL',
-            },
+            // {
+            //     url: 'https://slim-moom.goit.global',
+            //     description: 'Production API base URL',
+            // },
         ],
     },
     
