@@ -3,7 +3,7 @@ const router = express.Router();
 const Diary = require('../models/diary');
 const Product = require('../models/products');
 const auth = require('../middlewares/auth');  
-const { startOfDay, endOfDay } = require('date-fns');
+// const { startOfDay, endOfDay } = require('date-fns');
 
 /**
  * @swagger
@@ -155,19 +155,21 @@ router.post('/consumed', auth, async (req, res) => {
         const product_Calories = (product.calories * product_weight) / 100;
 
         //gasim/cream un jurnal pentru utilizator
-        let diaryEntry = await Diary.findOne({ userId });
+        let diaryEntry = await Diary.findOne({ userId }).populate({
+            path: 'entries.productId', 
+            select: 'title' 
+        });
 
         if (!diaryEntry) {
             diaryEntry = new Diary({ userId, entries: [] });
         }
 
-        // verific data curenta
-        const today = new Date().toDateString();
+        const today = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
 
         //  indexul intrarii existente pentru produsul consumat in acea zi
         const entryIndex = diaryEntry.entries.findIndex(entry => 
             entry.productId.toString() === productId.toString() &&
-            new Date(entry.date).toDateString() === today
+            new Date(entry.date).toISOString().startsWith(today.toISOString().split('T')[0])
         );
 
         if (entryIndex > -1) {
@@ -259,52 +261,60 @@ router.post('/consumed', auth, async (req, res) => {
 
 
 // Crearea unui endpoint pentru a șterge un produs consumat într-o anumită zi.
-
 router.delete('/remove/:date/:productId', auth, async (req, res) => {
     try {
         const { date, productId } = req.params;
         const userId = req.user._id;
 
-        // inceputul si sfarsitul zilei
-        const startDate = startOfDay(new Date(date));
-        const endDate = endOfDay(new Date(date));
+        console.log('Received date:', date);
+        console.log('Received productId:', productId);
 
-        // caut in colectie datele utiliz pe ziua respectiva
+        const inputDate = new Date(date);
+        const startDate = new Date(Date.UTC(inputDate.getUTCFullYear(), inputDate.getUTCMonth(), inputDate.getUTCDate()));
+        const endDate = new Date(Date.UTC(inputDate.getUTCFullYear(), inputDate.getUTCMonth(), inputDate.getUTCDate() + 1, 23, 59, 59, 999));
+
+        console.log('Searching between:', startDate.toISOString(), 'and', endDate.toISOString());
+
+        // Find the diary entry for the user and date
         const diaryEntry = await Diary.findOne({
             userId,
             'entries.date': {
                 $gte: startDate,
                 $lte: endDate
             }
+        }).populate({
+            path: 'entries.productId', 
+            select: 'title'
         });
 
         if (!diaryEntry) {
+            console.log('No diary entry found for this userId and date');
             return res.status(404).json({ message: "Diary entry not found for this date!" });
         }
 
+        // Find the entry to remove
         const entryIndex = diaryEntry.entries.findIndex(entry =>
-            entry.productId.toString() === productId.toString() &&
-            new Date(entry.date).toDateString() === new Date(date).toDateString()
+            entry._id.toString() === productId.toString()
         );
 
         if (entryIndex === -1) {
-            const product = await Product.findById(productId);
-            const productTitle = product ? product.title : 'unknown product';
-            
-            return res.status(404).json({ message: `Product ${productTitle} not found in diary for this date!` });
+            console.log('Product not found in diary entry');
+            return res.status(404).json({ message: `Product not found in diary for this date!` });
         }
 
         diaryEntry.entries.splice(entryIndex, 1);
         await diaryEntry.save();
 
-        return res.status(200).json({ message: "Consumed product removed successfully!" });
+        return res.status(200).json({
+            message: "Consumed product removed successfully!",
+            diaryEntry
+        });
 
     } catch (error) {
         console.error("Error deleting product:", error);
         return res.status(500).json({ error: 'Failed to delete product!' });
     }
 });
-
 
 /**
  * @swagger
@@ -382,29 +392,41 @@ router.get('/consumed/:date', auth, async (req, res) => {
         const { date } = req.params;
         const userId = req.user._id;
 
-        // transormam data primita intr-un obiect Date
-        const startDate = startOfDay(new Date(date));
-        const endDate = endOfDay(new Date(date));
+        // Convertim data primită într-un obiect Date
+         const inputDate = new Date(date);
+         const startDate = new Date(Date.UTC(inputDate.getUTCFullYear(), inputDate.getUTCMonth(), inputDate.getUTCDate()));
+        const endDate = new Date(Date.UTC(inputDate.getUTCFullYear(), inputDate.getUTCMonth(), inputDate.getUTCDate() + 1, 23, 59, 59, 999));
 
-        console.log('Start Date:', startDate);
-        console.log('End Date:', endDate);
+        console.log('Start Date:', startDate.toISOString());
+        console.log('End Date:', endDate.toISOString());
 
-        // Caut toate intrarile din jurnal pentru utilizatorul curent si data specificata
+        // toate intrarile din jurnal pentru utilizatorul curent si data selectata
         const diaryEntries = await Diary.findOne({
             userId,
             'entries.date': {
                 $gte: startDate,
                 $lte: endDate
             }
-        }).populate('entries.productId');
+        }).populate({
+            path: 'entries.productId', 
+            select: 'title' 
+        });
 
-        if (!diaryEntries) {
-            return res.status(404).json({ message: "No diary entry found for this date." });
+        if (!diaryEntries || diaryEntries.entries.length === 0) {
+            return res.status(200).json({
+                date,
+                consumedProducts: []
+            });
         }
+
+        // Filtrm produsele consumate in ziua specificata
+        const filteredEntries = diaryEntries.entries.filter(entry =>
+            new Date(entry.date).toDateString() === new Date(date).toDateString()
+        );
 
         return res.status(200).json({
             date,
-            consumedProducts: diaryEntries.entries
+            consumedProducts: filteredEntries
         });
     } catch (error) {
         console.error("Error fetching consumed products:", error);

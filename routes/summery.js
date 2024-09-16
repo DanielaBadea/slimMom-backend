@@ -181,7 +181,7 @@ router.get('/summary/:date', auth, async (req, res, next) => {
         });
     } catch (error) {
         console.error("Error calculating summary:", error);
-        return res.status(500).json({ message: "Error calculating summary" });
+        return res.status(500).json({ message: "Error calculating summary!" });
     }
 });
 
