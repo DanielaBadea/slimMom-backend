@@ -294,7 +294,7 @@ router.delete('/remove/:date/:productId', auth, async (req, res) => {
 
         // Find the entry to remove
         const entryIndex = diaryEntry.entries.findIndex(entry =>
-            entry._id.toString() === productId.toString()
+            entry.productId._id.toString() === productId.toString()
         );
 
         if (entryIndex === -1) {
@@ -415,7 +415,7 @@ router.get('/consumed/:date', auth, async (req, res) => {
         if (!diaryEntries || diaryEntries.entries.length === 0) {
             return res.status(200).json({
                 date,
-                consumedProducts: []
+                consumedProducts:[]
             });
         }
 

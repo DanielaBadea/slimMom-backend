@@ -129,10 +129,13 @@ router.get('/summary/:date', auth, async (req, res, next) => {
         if (!diaryEntry) {
             return res.status(404).json({ message: "No diary entry found for this date." });
         }
-    
-        // totalul caloriilor consumate
 
-        const totalConsumed = diaryEntry.entries.reduce((accumulator, product) => accumulator + product.product_Calories, 0);
+        let totalConsumed = 0;
+        
+        if (diaryEntry) {
+            totalConsumed = diaryEntry.entries.reduce((accumulator, product) => accumulator + product.product_Calories, 0);
+        }
+        // const totalConsumed = diaryEntry.entries.reduce((accumulator, product) => accumulator + product.product_Calories, 0);
         const dailyRate = 2800;
         const dailyLeft = dailyRate - totalConsumed;
         const dailyPercentage = ((totalConsumed / dailyRate) * 100).toFixed(2);
@@ -177,7 +180,8 @@ router.get('/summary/:date', auth, async (req, res, next) => {
             daily_left: dailyLeft,
             daily_consumed: totalConsumed,
             daily_rate: dailyRate,
-            percentage: dailyPercentage
+            percentage: dailyPercentage,
+            message: diaryEntry ? undefined : "No diary entry found for this date. Default values returned."
         });
     } catch (error) {
         console.error("Error calculating summary:", error);
